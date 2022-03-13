@@ -1,4 +1,7 @@
+#define _USE_MATH_DEFINES
+
 #include <GL/glut.h>
+#include <math.h>
  
 void displayMe(void)
 {
@@ -16,7 +19,7 @@ int main(int argc, char** argv)
 {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
-    glutInitWindowSize(400, 300);
+    glutInitWindowSize(800, 600);
     glutInitWindowPosition(100, 100);
     glutCreateWindow("Hello world!");
     glutDisplayFunc(displayMe);
