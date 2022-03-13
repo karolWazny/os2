@@ -1,2 +1,2 @@
 # os2
-<thread>
+thread - library for C== threading
