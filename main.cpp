@@ -42,6 +42,20 @@ public:
 		position += velocity;
 	}
 
+	void bounceVerticalWall(){
+		velocity.setX(-velocity.getX());
+		bouncesCount++;
+	}
+
+	void bounceHorizontalWall(){
+		velocity.setY(-velocity.getY());
+		bouncesCount++;
+	}
+
+	int getBounceCount(){
+		return bouncesCount;
+	};
+
 	PlanarVector& getPosition(){
 		return position;
 	}
@@ -65,21 +79,37 @@ public:
 	void setVelocity(double x, double y){
 		this->velocity = PlanarVector(x, y);
 	}
-
-
 private:
+	int bouncesCount{};
 	PlanarVector position;
 	PlanarVector velocity;
 };
 
-int main(){
-	Ball ball;
-	ball.setPosition(0, 0);
-	ball.setVelocity(0.01, 0.02);
-	while(true){
-		ball.move();
-		std::this_thread::sleep_for(std::chrono::milliseconds(750));
-		std::cout << "dupa: " << ball.getPosition().getX() << " " << ball.getPosition().getY() << "\n";
+void dupa(Ball* ball){
+	ball->setPosition(0, 0);
+	ball->setVelocity(0.03, 0.06);
+	while(ball->getBounceCount() < 8){
+		ball->move();
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		PlanarVector position = ball->getPosition();
+		if(position.getX() <= 0 || position.getX() >= 8){
+			ball->bounceVerticalWall();
+		}
+		if(position.getY() <= 0 || position.getY() >= 5){
+			ball->bounceHorizontalWall();
+		}
 	}
+}
+
+int main(){
+	Ball cycki;
+	cycki.setPosition(0, 0);
+	cycki.setVelocity(0.03, 0.06);
+	std::thread yetAnotherThread(std::ref(dupa), &cycki);
+	while(cycki.getBounceCount() < 8){
+		std::this_thread::sleep_for(std::chrono::milliseconds(510));
+		std::cout << cycki.getPosition().getX() << " " << cycki.getPosition().getY() << " " << cycki.getBounceCount() << "\n";
+	}
+	yetAnotherThread.join();
 	return 0;
 }
