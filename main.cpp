@@ -6,7 +6,18 @@
 #include <list>
 #include <random>
 #include <stdlib.h>
-#include <time.h>  
+#include <time.h>
+
+const double RECTANGLE_SPEED_FACTOR = 0.03;
+const double RECTANGLE_SPEED_MIN = 0.003;
+
+double getRandom(){
+	double lower_bound = 0.0;
+   	double upper_bound = 1.0;
+   	static std::uniform_real_distribution<double> unif(lower_bound,upper_bound);
+   	static std::default_random_engine re;
+   	return unif(re);
+}
 
 class PlanarVector{
 private:
@@ -50,6 +61,77 @@ public:
 	double R;
 	double G;
 	double B;
+};
+
+class Rectangle{
+public:
+	void move(){
+		leftTopCornerPosition += velocity;
+	}
+
+	void bounceVerticalWall(){
+		bool wasRightward = velocity.getX() > 0.0;
+		double speed = RECTANGLE_SPEED_MIN + getRandom() * RECTANGLE_SPEED_FACTOR;
+		if(wasRightward)
+			speed *= -1;
+		velocity.setX(speed);
+	}
+
+	void setVelocity(PlanarVector& value){
+		setVelocity(value.getX(), value.getY());
+	}
+
+	void setVelocity(double x, double y){
+		velocity = PlanarVector(x, y);
+	}
+
+	void setPosition(double x, double y){
+		leftTopCornerPosition.setX(x);
+		leftTopCornerPosition.setY(y);
+	}
+
+	void setPosition(PlanarVector& position){
+		setPosition(position.getX(), position.getY());
+	}
+
+	PlanarVector getPosition(){
+		return leftTopCornerPosition;
+	}
+
+	void setSize(double width, double height){
+		this->width = width;
+		this->height = height;
+	}
+
+	double getWidth(){
+		return width;
+	}
+
+	void setWidth(double width){
+		this->width = width;
+	}
+
+	double getHeight(){
+		return height;
+	}
+
+	void setHeight(double height){
+		this->height = height;
+	}
+
+	void setColor(Color color){
+		this->color = color;
+	}
+
+	Color getColor(){
+		return color;
+	}
+private:
+	Color color;
+	PlanarVector leftTopCornerPosition;
+	double width{0.1};
+	double height{0.1};
+	PlanarVector velocity;
 };
 
 class Ball{
@@ -143,6 +225,20 @@ void drawCircle(PlanarVector& position, double radius, Color color){
     glEnd();
 }
 
+void drawRect(PlanarVector& position, double width, double height, Color color = Color(0.5, 0.5, 0.5)){
+	double x1 = position.getX();
+	double y1 = position.getY();
+	double x2 = x1 + width;
+	double y2 = y1 - height;
+	glBegin(GL_TRIANGLE_STRIP);
+		glColor3f(color.R, color.G, color.B);
+		glVertex3f(x1, y1, 0.0);
+		glVertex3f(x2, y1, 0.0);
+		glVertex3f(x1, y2, 0.0);
+		glVertex3f(x2, y2, 0.0);
+    glEnd();
+}
+
 void dupa(Ball* ball){
 	while(ball->getBounceCount() < 6){
 		ball->move();
@@ -158,9 +254,21 @@ void dupa(Ball* ball){
 	ball->deactivate();
 }
 
+void takeCareOfRectangle(Rectangle* rectangle){
+	while(true){
+		rectangle->move();
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		PlanarVector position = rectangle->getPosition();
+		if(position.getX() < -1.0 || position.getX() + rectangle->getWidth() > 1.0){
+			rectangle->bounceVerticalWall();
+		}		
+	}
+}
+
 class ApplicationState{
 private:
 	static std::list<Ball*> balls;
+	static Rectangle* rectangle;
 public:
     static void displayMe(void){
         glClear(GL_COLOR_BUFFER_BIT);
@@ -181,12 +289,20 @@ public:
         		++i;
     		}
 		}
+		if(rectangle){
+			PlanarVector position = rectangle->getPosition();
+			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
+		}
 
         glFlush();
     }
 
-    static void revalidateBalls(){
-
+    static void addRectangle(Rectangle* rectangle){
+    	if(ApplicationState::rectangle)
+    		delete ApplicationState::rectangle;
+    	ApplicationState::rectangle = rectangle;
+    	std::thread yetAnotherThread(std::ref(takeCareOfRectangle), rectangle);
+		yetAnotherThread.detach();
     }
 
     static void addBall(Ball* ball){
@@ -197,6 +313,7 @@ public:
 };
 
 std::list<Ball*> ApplicationState::balls = std::list<Ball*>();
+Rectangle* ApplicationState::rectangle = nullptr;
 
 void forceRefresh(int data){
 	glutTimerFunc(20, forceRefresh, -1);
@@ -213,14 +330,6 @@ PlanarVector getRandomVelocity(){
    	double x = unif_x(re);
    	double y = unif_y(re);
    	return PlanarVector(x, y);
-}
-
-double getRandom(){
-	double lower_bound = 0.0;
-   	double upper_bound = 1.0;
-   	static std::uniform_real_distribution<double> unif(lower_bound,upper_bound);
-   	static std::default_random_engine re;
-   	return unif(re);
 }
 
 Color randomColor(){
@@ -245,6 +354,13 @@ int main(int argc, char** argv)
 	srand(time(NULL));
 
 	std::thread yetAnotherThread(std::ref(keepThrowingBalls));
+	Rectangle* rectangle = new Rectangle();
+	rectangle->setVelocity(0.003, 0.0);
+	Color color(0.5, 0.5, 0.5);
+	rectangle->setColor(color);
+	rectangle->setWidth(0.4);
+	rectangle->setHeight(0.2);
+	ApplicationState::addRectangle(rectangle);
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
