@@ -4,6 +4,9 @@
 #include <math.h>
 #include <GL/glut.h>
 #include <list>
+#include <random>
+#include <stdlib.h>
+#include <time.h>  
 
 class PlanarVector{
 private:
@@ -39,8 +42,30 @@ public:
 	}
 };
 
+class Color{
+public:
+	Color(double r = 1.0, double g = 1.0, double b = 1.0) : 
+				R(r), G(g), B(b) {};
+
+	double R;
+	double G;
+	double B;
+};
+
 class Ball{
 public:
+	void setColor(Color& color){
+		this->color = Color(color.R, color.G, color.B);
+	}
+
+	void setColor(double r, double g, double b){
+		this->color = Color(r, g, b);
+	}
+
+	Color getColor(){
+		return this->color;
+	}
+
 	void deactivate(){
 		this->active = false;
 	}
@@ -91,18 +116,20 @@ public:
 		this->velocity = PlanarVector(x, y);
 	}
 private:
+	Color color;
 	bool active{true};
 	int bouncesCount{};
 	PlanarVector position;
 	PlanarVector velocity;
 };
 
-void drawCircle(PlanarVector& position, double radius){
+void drawCircle(PlanarVector& position, double radius, Color color){
 	static double SQRT_2 = sqrt(2.0);
 	double x = position.getX();
 	double y = position.getY();
 	double scaledRadius = radius / SQRT_2;
 	glBegin(GL_TRIANGLE_FAN);
+		glColor3f(color.R, color.G, color.B);
 		glVertex3f(x, y, 0.0);
         glVertex3f(x + radius, y, 0.0);
         glVertex3f(x + scaledRadius, y + scaledRadius, 0.0);
@@ -131,20 +158,6 @@ void dupa(Ball* ball){
 	ball->deactivate();
 }
 
-/*int main(){
-	Ball* cycki = new Ball();
-	cycki->setPosition(0, 0);
-	cycki->setVelocity(0.03, 0.06);
-	std::thread yetAnotherThread(std::ref(dupa), cycki);
-	while(cycki->isActive()){
-		std::this_thread::sleep_for(std::chrono::milliseconds(300));
-		std::cout << cycki->getPosition().getX() << " " << cycki->getPosition().getY() << " " << cycki->getBounceCount() << "\n";
-	}
-	delete cycki;
-	yetAnotherThread.join();
-	return 0;
-}*/
-
 class ApplicationState{
 private:
 	static std::list<Ball*> balls;
@@ -164,7 +177,7 @@ public:
     		}
     		else
     		{
-        		drawCircle((*i)->getPosition(), radius);
+        		drawCircle((*i)->getPosition(), radius, (*i)->getColor());
         		++i;
     		}
 		}
@@ -189,14 +202,49 @@ void forceRefresh(int data){
 	glutTimerFunc(20, forceRefresh, -1);
 	glutPostRedisplay();
 }
+
+
+PlanarVector getRandomVelocity(){
+	double lower_bound = 0.003;
+   	double upper_bound = 0.01;
+   	static std::uniform_real_distribution<double> unif_y(lower_bound,upper_bound);
+   	static std::uniform_real_distribution<double> unif_x(-upper_bound,upper_bound);
+   	static std::default_random_engine re;
+   	double x = unif_x(re);
+   	double y = unif_y(re);
+   	return PlanarVector(x, y);
+}
+
+double getRandom(){
+	double lower_bound = 0.0;
+   	double upper_bound = 1.0;
+   	static std::uniform_real_distribution<double> unif(lower_bound,upper_bound);
+   	static std::default_random_engine re;
+   	return unif(re);
+}
+
+Color randomColor(){
+	return Color(getRandom(), getRandom(), getRandom());
+}
+
+void keepThrowingBalls(){
+	while(true){
+		Ball* ball = new Ball();
+		ball->setPosition(0.0, -1.0);
+		Color color = randomColor();
+		ball->setColor(color);
+		PlanarVector velocity = getRandomVelocity();
+		ball->setVelocity(velocity);
+		ApplicationState::addBall(ball);
+		std::this_thread::sleep_for(std::chrono::milliseconds(((rand() % 5) + 2) * 500));
+	}
+}
  
 int main(int argc, char** argv)
 {
-	PlanarVector velocity = PlanarVector(0.006, 0.005);
-	Ball* ball = new Ball();
-	ball->setVelocity(velocity);
-	//std::thread otherThread(ApplicationState::addBall, ball);
-	ApplicationState::addBall(ball);
+	srand(time(NULL));
+
+	std::thread yetAnotherThread(std::ref(keepThrowingBalls));
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
