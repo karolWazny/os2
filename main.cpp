@@ -239,7 +239,7 @@ void drawRect(PlanarVector& position, double width, double height, Color color =
     glEnd();
 }
 
-void dupa(Ball* ball){
+void takeCareOfBall(Ball* ball){
 	while(ball->getBounceCount() < 6){
 		ball->move();
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -307,7 +307,7 @@ public:
 
     static void addBall(Ball* ball){
     	balls.push_back(ball);
-		std::thread yetAnotherThread(std::ref(dupa), ball);
+		std::thread yetAnotherThread(std::ref(takeCareOfBall), ball);
 		yetAnotherThread.detach();
     }
 };
