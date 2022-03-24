@@ -1,1 +1,1 @@
-g++ openGL.cpp -lglut -lGLU -lGL; ./a.out
+g++ openGL.cpp -lglut -lGLU -lGL;

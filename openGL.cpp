@@ -1,7 +1,4 @@
-#define _USE_MATH_DEFINES
-
 #include <GL/glut.h>
-#include <math.h>
  
 void displayMe(void)
 {
@@ -26,3 +23,4 @@ int main(int argc, char** argv)
     glutMainLoop();
     return 0;
 }
+
