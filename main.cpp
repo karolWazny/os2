@@ -159,6 +159,7 @@ public:
     		bool isActive = (*i)->isActive();
     		if (!isActive)
     		{
+    			delete (*i);
         		balls.erase(i++);  // alternatively, i = items.erase(i);
     		}
     		else
