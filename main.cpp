@@ -72,8 +72,12 @@ public:
 	void bounceVerticalWall(){
 		bool wasRightward = velocity.getX() > 0.0;
 		double speed = RECTANGLE_SPEED_MIN + getRandom() * RECTANGLE_SPEED_FACTOR;
-		if(wasRightward)
+		if(wasRightward){
+			leftTopCornerPosition.setX(1.0 - width);
 			speed *= -1;
+		} else {
+			leftTopCornerPosition.setX(-1.0);
+		}
 		velocity.setX(speed);
 	}
 
