@@ -244,7 +244,7 @@ void drawRect(PlanarVector& position, double width, double height, Color color =
 }
 
 void takeCareOfBall(Ball* ball){
-	while(ball->getBounceCount() < 6){
+	while(ball->getBounceCount() < 6 && ball->isActive()){
 		ball->move();
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		PlanarVector position = ball->getPosition();
@@ -258,8 +258,8 @@ void takeCareOfBall(Ball* ball){
 	ball->deactivate();
 }
 
-void takeCareOfRectangle(Rectangle* rectangle){
-	while(true){
+void takeCareOfRectangle(Rectangle* rectangle, bool* keepRunning){
+	while(*keepRunning){
 		rectangle->move();
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		PlanarVector position = rectangle->getPosition();
@@ -269,27 +269,63 @@ void takeCareOfRectangle(Rectangle* rectangle){
 	}
 }
 
+class BallThread{
+private:
+	Ball* ball{};
+	std::thread* thread{};
+public:
+	BallThread(Ball* ball) : ball(ball){
+		thread = new std::thread(std::ref(takeCareOfBall), ball);
+	}
+
+	~BallThread(){
+		join();
+		delete ball;
+		delete thread;
+	}
+
+	bool isRunning(){
+		return ball->isActive();
+	}
+
+	void finish(){
+		ball->deactivate();
+	}
+
+	void join(){
+		if(thread->joinable())
+			thread->join();
+	}
+
+	Ball* getBall(){
+		return ball;
+	}
+};
+
 class ApplicationState{
 private:
+	static std::list<BallThread*> ballThreads;
 	static std::list<Ball*> balls;
 	static Rectangle* rectangle;
+	static std::thread* rectangleThread;
+	static bool running;
 public:
     static void displayMe(void){
         glClear(GL_COLOR_BUFFER_BIT);
         double radius = 0.02;
 
-        std::list<Ball*>::iterator i = balls.begin();
-		while (i != balls.end())
+        std::list<BallThread*>::iterator i = ballThreads.begin();
+		while (i != ballThreads.end())
 		{
-    		bool isActive = (*i)->isActive();
+    		bool isActive = (*i)->isRunning();
     		if (!isActive)
     		{
     			delete (*i);
-        		balls.erase(i++);  // alternatively, i = items.erase(i);
+        		ballThreads.erase(i++);  // alternatively, i = items.erase(i);
     		}
     		else
     		{
-        		drawCircle((*i)->getPosition(), radius, (*i)->getColor());
+        		drawCircle((*i)->getBall()->getPosition(), radius, (*i)->getBall()->getColor());
         		++i;
     		}
 		}
@@ -302,22 +338,39 @@ public:
     }
 
     static void addRectangle(Rectangle* rectangle){
-    	if(ApplicationState::rectangle)
-    		delete ApplicationState::rectangle;
-    	ApplicationState::rectangle = rectangle;
-    	std::thread yetAnotherThread(std::ref(takeCareOfRectangle), rectangle);
-		yetAnotherThread.detach();
+    	if(!rectangleThread){
+    		running = true;
+    		ApplicationState::rectangle = rectangle;
+    		rectangleThread = new std::thread(std::ref(takeCareOfRectangle), rectangle, &running);
+    	}
     }
 
     static void addBall(Ball* ball){
-    	balls.push_back(ball);
-		std::thread yetAnotherThread(std::ref(takeCareOfBall), ball);
-		yetAnotherThread.detach();
+    	ballThreads.push_back(new BallThread(ball));
+    }
+
+    static void finishThreads(){
+    	for(BallThread* thread : ballThreads){
+    		thread->finish();
+    		thread->join();
+    		delete thread;
+    	}
+    	ballThreads = std::list<BallThread*>();
+    	running = false;
+    		if(rectangleThread){
+    		rectangleThread->join();
+    		delete rectangleThread;
+    		rectangleThread = nullptr;
+    		delete rectangle;
+    		rectangle = nullptr;
+    	}
     }
 };
 
-std::list<Ball*> ApplicationState::balls = std::list<Ball*>();
+std::list<BallThread*> ApplicationState::ballThreads = std::list<BallThread*>();
 Rectangle* ApplicationState::rectangle = nullptr;
+std::thread* ApplicationState::rectangleThread = nullptr;
+bool ApplicationState::running = true;
 
 void forceRefresh(int data){
 	glutTimerFunc(20, forceRefresh, -1);
@@ -352,6 +405,19 @@ void keepThrowingBalls(){
 		std::this_thread::sleep_for(std::chrono::milliseconds(((rand() % 5) + 2) * 500));
 	}
 }
+
+void cleanup(){
+	std::cout << "cleanup!\n";
+	ApplicationState::finishThreads();
+}
+
+void keyboardCallback(unsigned char key, int x, int y){
+	if(key == 27) //pressed ESCAPE
+	{
+		std::cout << "Pressed ESC.\nCleaning up and calling exit...\n";
+		exit(0);
+	}
+}
  
 int main(int argc, char** argv)
 {
@@ -373,6 +439,8 @@ int main(int argc, char** argv)
     glutCreateWindow("Hello world!");
     glutDisplayFunc(ApplicationState::displayMe);
     glutTimerFunc(20, forceRefresh, -1);
+    atexit(cleanup);
+    glutKeyboardFunc(keyboardCallback);
     glutMainLoop();
     return 0;
 }
