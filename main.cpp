@@ -81,6 +81,7 @@ public:
 
 class Ball{
 public:
+
 	void setColor(Color& color){
 		this->color = Color(color.R, color.G, color.B);
 	}
@@ -156,6 +157,10 @@ private:
 
 class Rectangle{
 public:
+	PlanarVector getVelocity(){
+		return velocity;
+	}
+
 	void freeFromOccupant(){
 		occupiedBy = nullptr;
 		std::cout << "End occupation\n";
@@ -318,22 +323,6 @@ void takeCareOfBall(Ball* ball, Rectangle* rectangle){
 	ball->deactivate();
 }
 
-void takeCareOfRectangle(Rectangle* rectangle, bool* keepRunning){
-	while(*keepRunning){
-		Ball* occupant = rectangle->getOccupant();
-		if(occupant){
-			if(!isBallInsideRectangle(occupant, rectangle))
-				rectangle->freeFromOccupant();
-		}
-		rectangle->move();
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		PlanarVector position = rectangle->getPosition();
-		if(position.getX() < -1.0 || position.getX() + rectangle->getWidth() > 1.0){
-			rectangle->bounceVerticalWall();
-		}		
-	}
-}
-
 class BallThread{
 private:
 	Ball* ball{};
@@ -377,6 +366,60 @@ private:
 	static std::thread* rectangleThread;
 	static bool running;
 public:
+	static void takeCareOfRectangle(Rectangle* rectangle, bool* keepRunning){
+		while(*keepRunning){
+			Ball* occupant = rectangle->getOccupant();
+			if(occupant){
+				if(!isBallInsideRectangle(occupant, rectangle))
+					rectangle->freeFromOccupant();
+			}
+			std::list<Ball*> endangeredBalls;
+			for(BallThread* ballThread : ballThreads){
+				if(isEndangeredByRectangle(ballThread->getBall())){
+					endangeredBalls.push_back(ballThread->getBall());
+				}
+			}
+			rectangle->move();
+			for(Ball* ball : endangeredBalls){
+				if(isBallInsideRectangle(ball, rectangle) && ball != rectangle->getOccupant()){
+					if(rectangle->isOpen()){
+						rectangle->occupyBy(ball);
+					} else {
+						if(rectangle->getVelocity().getX() > 0)
+							ball->getPosition().setX(rectangle->getPosition().getX() + rectangle->getWidth() + radius);
+						else
+							ball->getPosition().setX(rectangle->getPosition().getX() - radius);
+						if(ball->getPosition().getX() > 1.0 || ball->getPosition().getX() < -1.0)
+							ball->deactivate();
+					}
+				}
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			PlanarVector position = rectangle->getPosition();
+			if(position.getX() < -1.0 || position.getX() + rectangle->getWidth() > 1.0){
+				rectangle->bounceVerticalWall();
+			}		
+		}
+	}
+
+	static bool isEndangeredByRectangle(Ball* ball){
+		if(!rectangle)
+			return false;
+		if(rectangle->getVelocity().getX() > 0)
+			return isRightwardsFromRectangle(ball);
+		else
+			return isLeftwardsFromRectangle(ball);
+
+	}
+
+	static bool isLeftwardsFromRectangle(Ball* ball){
+		return ball->getPosition().getX() < rectangle->getPosition().getX();
+	}
+
+	static bool isRightwardsFromRectangle(Ball* ball){
+		return ball->getPosition().getX() > rectangle->getPosition().getX() + rectangle->getWidth();
+	}
+
     static void displayMe(void){
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -408,7 +451,7 @@ public:
     	if(!rectangleThread){
     		running = true;
     		ApplicationState::rectangle = rectangle;
-    		rectangleThread = new std::thread(std::ref(takeCareOfRectangle), rectangle, &running);
+    		rectangleThread = new std::thread(std::ref(ApplicationState::takeCareOfRectangle), rectangle, &running);
     	}
     }
 
