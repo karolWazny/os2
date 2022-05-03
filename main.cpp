@@ -318,6 +318,11 @@ public:
     static void displayMe(void){
         glClear(GL_COLOR_BUFFER_BIT);
         double radius = 0.02;
+        
+		if(rectangle){
+			PlanarVector position = rectangle->getPosition();
+			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
+		}
 
         std::list<BallThread*>::iterator i = ballThreads.begin();
 		while (i != ballThreads.end())
@@ -333,10 +338,6 @@ public:
         		drawCircle((*i)->getBall()->getPosition(), radius, (*i)->getBall()->getColor());
         		++i;
     		}
-		}
-		if(rectangle){
-			PlanarVector position = rectangle->getPosition();
-			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
 		}
 
         glFlush();
