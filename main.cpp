@@ -398,8 +398,12 @@ Color randomColor(){
 	return Color(getRandom(), getRandom(), getRandom());
 }
 
+bool keepThrowing = false;
+std::thread* throwingThread = nullptr;
+
 void keepThrowingBalls(){
-	while(true){
+	keepThrowing = true;
+	while(keepThrowing){
 		Ball* ball = new Ball();
 		ball->setPosition(0.0, -1.0);
 		Color color = randomColor();
@@ -409,10 +413,13 @@ void keepThrowingBalls(){
 		ApplicationState::addBall(ball);
 		std::this_thread::sleep_for(std::chrono::milliseconds(((rand() % 5) + 2) * 500));
 	}
+	std::cout << "Not throwing no more!\n";
 }
 
 void cleanup(){
 	std::cout << "cleanup!\n";
+	keepThrowing = false;
+	throwingThread->join();
 	ApplicationState::finishThreads();
 }
 
@@ -428,7 +435,7 @@ int main(int argc, char** argv)
 {
 	srand(time(NULL));
 
-	std::thread yetAnotherThread(std::ref(keepThrowingBalls));
+	throwingThread = new std::thread(std::ref(keepThrowingBalls));
 	Rectangle* rectangle = new Rectangle();
 	rectangle->setVelocity(0.003, 0.0);
 	Color color(0.5, 0.5, 0.5);
