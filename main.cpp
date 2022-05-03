@@ -11,10 +11,11 @@
 //jak pileczka jest wewnatrz prostokata, inne czekaja az ta z niego wyjdzie
 //albo prostokat sie usunie z drogi
 
-//konczyc watek rzucajacy pilki
+//konczyc watek rzucajacy pilki - zrobione
 
-const double RECTANGLE_SPEED_FACTOR = 0.03;
+const double RECTANGLE_SPEED_FACTOR = 0.01;
 const double RECTANGLE_SPEED_MIN = 0.003;
+const double radius = 0.02;
 
 double getRandom(){
 	double lower_bound = 0.0;
@@ -38,6 +39,16 @@ public:
 	PlanarVector& operator+=(PlanarVector& other){
 		x += other.x;
 		y += other.y;
+		return *this;
+	}
+
+	PlanarVector operator-(PlanarVector& other){
+		return PlanarVector(x - other.x, y - other.y);
+	}
+
+	PlanarVector& operator-=(PlanarVector& other){
+		x -= other.x;
+		y -= other.y;
 		return *this;
 	}
 
@@ -68,8 +79,101 @@ public:
 	double B;
 };
 
+class Ball{
+public:
+	void setColor(Color& color){
+		this->color = Color(color.R, color.G, color.B);
+	}
+
+	void setColor(double r, double g, double b){
+		this->color = Color(r, g, b);
+	}
+
+	Color getColor(){
+		return this->color;
+	}
+
+	void deactivate(){
+		this->active = false;
+	}
+
+	bool isActive(){
+		return active;
+	}
+
+	void move(){
+		position += velocity;
+	}
+
+	void moveBackwards(){
+		position -= velocity;
+	}
+
+	void bounceVerticalWall(){
+		velocity.setX(-velocity.getX());
+		bouncesCount++;
+	}
+
+	void bounceHorizontalWall(){
+		velocity.setY(-velocity.getY());
+		bouncesCount++;
+	}
+
+	int getBounceCount(){
+		return bouncesCount;
+	};
+
+	PlanarVector& getPosition(){
+		return position;
+	}
+
+	PlanarVector& getVelocity(){
+		return velocity;
+	}
+
+	void setPosition(PlanarVector& position){
+		setPosition(position.getX(), position.getY());
+	}
+
+	void setPosition(double x, double y){
+		this->position = PlanarVector(x, y);
+	}
+
+	void setVelocity(PlanarVector& velocity){
+		setVelocity(velocity.getX(), velocity.getY());
+	}
+
+	void setVelocity(double x, double y){
+		this->velocity = PlanarVector(x, y);
+	}
+private:
+	Color color;
+	bool active{true};
+	int bouncesCount{};
+	PlanarVector position;
+	PlanarVector velocity;
+};
+
 class Rectangle{
 public:
+	void freeFromOccupant(){
+		occupiedBy = nullptr;
+		std::cout << "End occupation\n";
+	}
+
+	Ball* getOccupant(){
+		return occupiedBy;
+	}
+
+	void occupyBy(Ball* ball){
+		std::cout << "Start occupation\n";
+		occupiedBy = ball;
+	}
+
+	bool isOpen(){
+		return !occupiedBy;
+	}
+
 	void move(){
 		leftTopCornerPosition += velocity;
 	}
@@ -136,81 +240,11 @@ public:
 		return color;
 	}
 private:
+	Ball* occupiedBy{};
 	Color color;
 	PlanarVector leftTopCornerPosition;
 	double width{0.1};
 	double height{0.1};
-	PlanarVector velocity;
-};
-
-class Ball{
-public:
-	void setColor(Color& color){
-		this->color = Color(color.R, color.G, color.B);
-	}
-
-	void setColor(double r, double g, double b){
-		this->color = Color(r, g, b);
-	}
-
-	Color getColor(){
-		return this->color;
-	}
-
-	void deactivate(){
-		this->active = false;
-	}
-
-	bool isActive(){
-		return active;
-	}
-
-	void move(){
-		position += velocity;
-	}
-
-	void bounceVerticalWall(){
-		velocity.setX(-velocity.getX());
-		bouncesCount++;
-	}
-
-	void bounceHorizontalWall(){
-		velocity.setY(-velocity.getY());
-		bouncesCount++;
-	}
-
-	int getBounceCount(){
-		return bouncesCount;
-	};
-
-	PlanarVector& getPosition(){
-		return position;
-	}
-
-	PlanarVector& getVelocity(){
-		return velocity;
-	}
-
-	void setPosition(PlanarVector& position){
-		setPosition(position.getX(), position.getY());
-	}
-
-	void setPosition(double x, double y){
-		this->position = PlanarVector(x, y);
-	}
-
-	void setVelocity(PlanarVector& velocity){
-		setVelocity(velocity.getX(), velocity.getY());
-	}
-
-	void setVelocity(double x, double y){
-		this->velocity = PlanarVector(x, y);
-	}
-private:
-	Color color;
-	bool active{true};
-	int bouncesCount{};
-	PlanarVector position;
 	PlanarVector velocity;
 };
 
@@ -238,7 +272,7 @@ void drawRect(PlanarVector& position, double width, double height, Color color =
 	double x1 = position.getX();
 	double y1 = position.getY();
 	double x2 = x1 + width;
-	double y2 = y1 - height;
+	double y2 = y1 + height;
 	glBegin(GL_TRIANGLE_STRIP);
 		glColor3f(color.R, color.G, color.B);
 		glVertex3f(x1, y1, 0.0);
@@ -248,9 +282,28 @@ void drawRect(PlanarVector& position, double width, double height, Color color =
     glEnd();
 }
 
-void takeCareOfBall(Ball* ball){
+bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
+	PlanarVector ballPosition = ball->getPosition();
+	PlanarVector topLeftCornerPosition = rectangle->getPosition();
+	return ballPosition.getY() + radius > topLeftCornerPosition.getY()
+			&& ballPosition.getY() - radius < topLeftCornerPosition.getY() + rectangle->getHeight()
+			&& ballPosition.getX() + radius > topLeftCornerPosition.getX()
+			&& ballPosition.getX() - radius < topLeftCornerPosition.getX() + rectangle->getWidth();
+}
+
+void takeCareOfBall(Ball* ball, Rectangle* rectangle){
 	while(ball->getBounceCount() < 6 && ball->isActive()){
+		bool wasInsideRectangle = isBallInsideRectangle(ball, rectangle);
 		ball->move();
+		bool isInsideRectangleAfterMoving = isBallInsideRectangle(ball, rectangle);
+		bool movedIntoRectangle = !wasInsideRectangle && isInsideRectangleAfterMoving;
+		if(movedIntoRectangle){
+			if(rectangle->isOpen()){
+				rectangle->occupyBy(ball);
+			} else {
+				ball->moveBackwards();
+			}
+		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		PlanarVector position = ball->getPosition();
 		if(position.getX() < -1.0 || position.getX() > 1.0){
@@ -260,11 +313,18 @@ void takeCareOfBall(Ball* ball){
 			ball->bounceHorizontalWall();
 		}			
 	}
+	if(rectangle->getOccupant() == ball)
+		rectangle->freeFromOccupant();
 	ball->deactivate();
 }
 
 void takeCareOfRectangle(Rectangle* rectangle, bool* keepRunning){
 	while(*keepRunning){
+		Ball* occupant = rectangle->getOccupant();
+		if(occupant){
+			if(!isBallInsideRectangle(occupant, rectangle))
+				rectangle->freeFromOccupant();
+		}
 		rectangle->move();
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		PlanarVector position = rectangle->getPosition();
@@ -277,10 +337,12 @@ void takeCareOfRectangle(Rectangle* rectangle, bool* keepRunning){
 class BallThread{
 private:
 	Ball* ball{};
+	Rectangle* rectangle{};
 	std::thread* thread{};
 public:
-	BallThread(Ball* ball) : ball(ball){
-		thread = new std::thread(std::ref(takeCareOfBall), ball);
+	BallThread(Ball* ball, Rectangle* rectangle = nullptr)
+								: ball(ball), rectangle(rectangle){
+		thread = new std::thread(std::ref(takeCareOfBall), ball, rectangle);
 	}
 
 	~BallThread(){
@@ -317,8 +379,7 @@ private:
 public:
     static void displayMe(void){
         glClear(GL_COLOR_BUFFER_BIT);
-        double radius = 0.02;
-        
+
 		if(rectangle){
 			PlanarVector position = rectangle->getPosition();
 			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
@@ -352,7 +413,7 @@ public:
     }
 
     static void addBall(Ball* ball){
-    	ballThreads.push_back(new BallThread(ball));
+    	ballThreads.push_back(new BallThread(ball, rectangle));
     }
 
     static void finishThreads(){
@@ -436,14 +497,14 @@ int main(int argc, char** argv)
 {
 	srand(time(NULL));
 
-	throwingThread = new std::thread(std::ref(keepThrowingBalls));
 	Rectangle* rectangle = new Rectangle();
 	rectangle->setVelocity(0.003, 0.0);
 	Color color(0.5, 0.5, 0.5);
 	rectangle->setColor(color);
-	rectangle->setWidth(0.4);
-	rectangle->setHeight(0.2);
+	rectangle->setWidth(0.6);
+	rectangle->setHeight(0.3);
 	ApplicationState::addRectangle(rectangle);
+	throwingThread = new std::thread(std::ref(keepThrowingBalls));
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
