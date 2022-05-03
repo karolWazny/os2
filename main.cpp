@@ -8,6 +8,11 @@
 #include <stdlib.h>
 #include <time.h>
 
+//jak pileczka jest wewnatrz prostokata, inne czekaja az ta z niego wyjdzie
+//albo prostokat sie usunie z drogi
+
+//konczyc watek rzucajacy pilki
+
 const double RECTANGLE_SPEED_FACTOR = 0.03;
 const double RECTANGLE_SPEED_MIN = 0.003;
 
