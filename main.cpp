@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <mutex>
+#include <atomic>
 
 //jak pileczka jest wewnatrz prostokata, inne czekaja az ta z niego wyjdzie
 //albo prostokat sie usunie z drogi
@@ -157,7 +158,7 @@ public:
 private:
 	std::mutex mutex;
 	Color color;
-	bool active{true};
+	std::atomic<bool> active{true};
 	int bouncesCount{};
 	PlanarVector position;
 	PlanarVector velocity;
@@ -306,27 +307,39 @@ void drawRect(PlanarVector& position, double width, double height, Color color =
     glEnd();
 }
 
-bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
-	PlanarVector ballPosition = ball->getPosition();
+
+bool isBallInsideRectangle(PlanarVector& ballPosition, Rectangle* rectangle){
 	PlanarVector topLeftCornerPosition = rectangle->getPosition();
 	return ballPosition.getY() + radius > topLeftCornerPosition.getY()
 			&& ballPosition.getY() - radius < topLeftCornerPosition.getY() + rectangle->getHeight()
 			&& ballPosition.getX() + radius > topLeftCornerPosition.getX()
 			&& ballPosition.getX() - radius < topLeftCornerPosition.getX() + rectangle->getWidth();
+};
+
+
+bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
+	return isBallInsideRectangle(ball->getPosition(), rectangle);
+}
+
+bool willEnterRectangle(Ball* ball, Rectangle* rectangle){
+	bool wasInsideRectangle = isBallInsideRectangle(ball, rectangle);
+	PlanarVector position = ball->getPosition();
+	PlanarVector velocity = ball->getVelocity();
+	position += velocity;
+	bool wouldEndUpInRectangle = isBallInsideRectangle(position, rectangle);
+	return !wasInsideRectangle && wouldEndUpInRectangle;
 }
 
 void takeCareOfBall(Ball* ball, Rectangle* rectangle){
 	while(ball->getBounceCount() < 6 && ball->isActive()){
-		bool wasInsideRectangle = isBallInsideRectangle(ball, rectangle);
-		ball->move();
-		bool isInsideRectangleAfterMoving = isBallInsideRectangle(ball, rectangle);
-		bool movedIntoRectangle = !wasInsideRectangle && isInsideRectangleAfterMoving;
-		if(movedIntoRectangle){
+		bool wouldMoveIntoRectangle = willEnterRectangle(ball, rectangle);
+		if(wouldMoveIntoRectangle){
 			if(rectangle->isOpen()){
+				ball->move();
 				rectangle->occupyBy(ball);
-			} else {
-				ball->moveBackwards();
 			}
+		} else {
+			ball->move();
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		PlanarVector position = ball->getPosition();
