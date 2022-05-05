@@ -7,6 +7,7 @@
 #include <random>
 #include <stdlib.h>
 #include <time.h>
+#include <mutex>
 
 //jak pileczka jest wewnatrz prostokata, inne czekaja az ta z niego wyjdzie
 //albo prostokat sie usunie z drogi
@@ -81,7 +82,6 @@ public:
 
 class Ball{
 public:
-
 	void setColor(Color& color){
 		this->color = Color(color.R, color.G, color.B);
 	}
@@ -95,6 +95,7 @@ public:
 	}
 
 	void deactivate(){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->active = false;
 	}
 
@@ -103,19 +104,23 @@ public:
 	}
 
 	void move(){
+		std::lock_guard<std::mutex> lk(mutex);
 		position += velocity;
 	}
 
 	void moveBackwards(){
+		std::lock_guard<std::mutex> lk(mutex);
 		position -= velocity;
 	}
 
 	void bounceVerticalWall(){
+		std::lock_guard<std::mutex> lk(mutex);
 		velocity.setX(-velocity.getX());
 		bouncesCount++;
 	}
 
 	void bounceHorizontalWall(){
+		std::lock_guard<std::mutex> lk(mutex);
 		velocity.setY(-velocity.getY());
 		bouncesCount++;
 	}
@@ -137,6 +142,7 @@ public:
 	}
 
 	void setPosition(double x, double y){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->position = PlanarVector(x, y);
 	}
 
@@ -145,9 +151,11 @@ public:
 	}
 
 	void setVelocity(double x, double y){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->velocity = PlanarVector(x, y);
 	}
 private:
+	std::mutex mutex;
 	Color color;
 	bool active{true};
 	int bouncesCount{};
