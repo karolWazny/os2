@@ -170,6 +170,7 @@ public:
 	}
 
 	void freeFromOccupant(){
+		std::lock_guard<std::mutex> lk(mutex);
 		occupiedBy = nullptr;
 		std::cout << "End occupation\n";
 	}
@@ -180,6 +181,7 @@ public:
 
 	void occupyBy(Ball* ball){
 		std::cout << "Start occupation\n";
+		std::lock_guard<std::mutex> lk(mutex);
 		occupiedBy = ball;
 	}
 
@@ -188,10 +190,12 @@ public:
 	}
 
 	void move(){
+		std::lock_guard<std::mutex> lk(mutex);
 		leftTopCornerPosition += velocity;
 	}
 
 	void bounceVerticalWall(){
+		std::lock_guard<std::mutex> lk(mutex);
 		bool wasRightward = velocity.getX() > 0.0;
 		double speed = RECTANGLE_SPEED_MIN + getRandom() * RECTANGLE_SPEED_FACTOR;
 		if(wasRightward){
@@ -208,10 +212,12 @@ public:
 	}
 
 	void setVelocity(double x, double y){
+		std::lock_guard<std::mutex> lk(mutex);
 		velocity = PlanarVector(x, y);
 	}
 
 	void setPosition(double x, double y){
+		std::lock_guard<std::mutex> lk(mutex);
 		leftTopCornerPosition.setX(x);
 		leftTopCornerPosition.setY(y);
 	}
@@ -225,6 +231,7 @@ public:
 	}
 
 	void setSize(double width, double height){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->width = width;
 		this->height = height;
 	}
@@ -234,6 +241,7 @@ public:
 	}
 
 	void setWidth(double width){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->width = width;
 	}
 
@@ -242,10 +250,12 @@ public:
 	}
 
 	void setHeight(double height){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->height = height;
 	}
 
 	void setColor(Color color){
+		std::lock_guard<std::mutex> lk(mutex);
 		this->color = color;
 	}
 
@@ -253,6 +263,7 @@ public:
 		return color;
 	}
 private:
+	std::mutex mutex;
 	Ball* occupiedBy{};
 	Color color;
 	PlanarVector leftTopCornerPosition;
