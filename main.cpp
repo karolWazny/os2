@@ -101,6 +101,7 @@ public:
 	}
 
 	bool isActive(){
+		std::lock_guard<std::mutex> lk(mutex);
 		return active;
 	}
 
@@ -127,14 +128,17 @@ public:
 	}
 
 	int getBounceCount(){
+		std::lock_guard<std::mutex> lk(mutex);
 		return bouncesCount;
 	};
 
 	PlanarVector& getPosition(){
+		std::lock_guard<std::mutex> lk(mutex);
 		return position;
 	}
 
 	PlanarVector& getVelocity(){
+		std::lock_guard<std::mutex> lk(mutex);
 		return velocity;
 	}
 
@@ -330,6 +334,8 @@ bool willEnterRectangle(Ball* ball, Rectangle* rectangle){
 	return !wasInsideRectangle && wouldEndUpInRectangle;
 }
 
+std::mutex ballsListMutex;
+
 void takeCareOfBall(Ball* ball, Rectangle* rectangle){
 	while(ball->getBounceCount() < 6 && ball->isActive()){
 		bool wouldMoveIntoRectangle = willEnterRectangle(ball, rectangle);
@@ -405,24 +411,27 @@ public:
 				if(!isBallInsideRectangle(occupant, rectangle))
 					rectangle->freeFromOccupant();
 			}
-			std::list<Ball*> endangeredBalls;
-			for(BallThread* ballThread : ballThreads){
-				if(isEndangeredByRectangle(ballThread->getBall())){
-					endangeredBalls.push_back(ballThread->getBall());
+			{
+				std::lock_guard<std::mutex> lk(ballsListMutex);
+				std::list<Ball*> endangeredBalls;
+				for(BallThread* ballThread : ballThreads){
+					if(isEndangeredByRectangle(ballThread->getBall())){
+						endangeredBalls.push_back(ballThread->getBall());
+					}
 				}
-			}
-			rectangle->move();
-			for(Ball* ball : endangeredBalls){
-				if(isBallInsideRectangle(ball, rectangle) && ball != rectangle->getOccupant()){
-					if(rectangle->isOpen()){
-						rectangle->occupyBy(ball);
-					} else {
-						if(rectangle->getVelocity().getX() > 0)
-							ball->getPosition().setX(rectangle->getPosition().getX() + rectangle->getWidth() + radius);
-						else
-							ball->getPosition().setX(rectangle->getPosition().getX() - radius);
-						if(ball->getPosition().getX() > 1.0 || ball->getPosition().getX() < -1.0)
-							ball->deactivate();
+				rectangle->move();
+				for(Ball* ball : endangeredBalls){
+					if(isBallInsideRectangle(ball, rectangle) && ball != rectangle->getOccupant()){
+						if(rectangle->isOpen()){
+							rectangle->occupyBy(ball);
+						} else {
+							if(rectangle->getVelocity().getX() > 0)
+								ball->getPosition().setX(rectangle->getPosition().getX() + rectangle->getWidth() + radius);
+							else
+								ball->getPosition().setX(rectangle->getPosition().getX() - radius);
+							if(ball->getPosition().getX() > 1.0 || ball->getPosition().getX() < -1.0)
+								ball->deactivate();
+						}
 					}
 				}
 			}
@@ -459,21 +468,24 @@ public:
 			PlanarVector position = rectangle->getPosition();
 			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
 		}
-
-        std::list<BallThread*>::iterator i = ballThreads.begin();
-		while (i != ballThreads.end())
 		{
-    		bool isActive = (*i)->isRunning();
-    		if (!isActive)
-    		{
-    			delete (*i);
-        		ballThreads.erase(i++);  // alternatively, i = items.erase(i);
-    		}
-    		else
-    		{
-        		drawCircle((*i)->getBall()->getPosition(), radius, (*i)->getBall()->getColor());
-        		++i;
-    		}
+
+			std::lock_guard<std::mutex> lk(ballsListMutex);
+	        std::list<BallThread*>::iterator i = ballThreads.begin();
+			while (i != ballThreads.end())
+			{
+	    		bool isActive = (*i)->isRunning();
+	    		if (!isActive)
+	    		{
+	    			delete (*i);
+	        		ballThreads.erase(i++);  // alternatively, i = items.erase(i);
+	    		}
+	    		else
+	    		{
+	        		drawCircle((*i)->getBall()->getPosition(), radius, (*i)->getBall()->getColor());
+	        		++i;
+	    		}
+			}
 		}
 
         glFlush();
@@ -488,14 +500,18 @@ public:
     }
 
     static void addBall(Ball* ball){
+
     	ballThreads.push_back(new BallThread(ball, rectangle));
     }
 
     static void finishThreads(){
-    	for(BallThread* thread : ballThreads){
-    		thread->finish();
-    		thread->join();
-    		delete thread;
+    	{
+    		std::lock_guard<std::mutex> lk(ballsListMutex);
+    		for(BallThread* thread : ballThreads){
+    	    		thread->finish();
+    	    		thread->join();
+    	    		delete thread;
+    	    	}
     	}
     	ballThreads = std::list<BallThread*>();
     	running = false;
