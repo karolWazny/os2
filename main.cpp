@@ -7,6 +7,7 @@
 #include <random>
 #include <stdlib.h>
 #include <time.h>
+#include <condition_variable>
 
 //jak pileczka jest wewnatrz prostokata, inne czekaja az ta z niego wyjdzie
 //albo prostokat sie usunie z drogi
@@ -15,7 +16,13 @@
 
 const double RECTANGLE_SPEED_FACTOR = 0.01;
 const double RECTANGLE_SPEED_MIN = 0.003;
+const int BALL_THROWING_DELAY = 100;
 const double radius = 0.02;
+
+std::mutex cv_m;
+std::condition_variable cv;
+
+//std::mutex rectangle_mutex;
 
 double getRandom(){
 	double lower_bound = 0.0;
@@ -163,7 +170,7 @@ public:
 
 	void freeFromOccupant(){
 		occupiedBy = nullptr;
-		std::cout << "End occupation\n";
+		//std::cout << "End occupation\n";
 	}
 
 	Ball* getOccupant(){
@@ -171,7 +178,7 @@ public:
 	}
 
 	void occupyBy(Ball* ball){
-		std::cout << "Start occupation\n";
+		//std::cout << "Start occupation\n";
 		occupiedBy = ball;
 	}
 
@@ -287,8 +294,7 @@ void drawRect(PlanarVector& position, double width, double height, Color color =
     glEnd();
 }
 
-bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
-	PlanarVector ballPosition = ball->getPosition();
+bool isBallInsideRectangle(PlanarVector& ballPosition, Rectangle* rectangle){
 	PlanarVector topLeftCornerPosition = rectangle->getPosition();
 	return ballPosition.getY() + radius > topLeftCornerPosition.getY()
 			&& ballPosition.getY() - radius < topLeftCornerPosition.getY() + rectangle->getHeight()
@@ -296,18 +302,36 @@ bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
 			&& ballPosition.getX() - radius < topLeftCornerPosition.getX() + rectangle->getWidth();
 }
 
+bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
+	return isBallInsideRectangle(ball->getPosition(), rectangle);
+}
+
+bool isMoveAllowed(Ball* ball, Rectangle* rectangle){
+	PlanarVector positionAfterMove = ball->getPosition() + ball->getVelocity();
+	bool ballInsidePre = isBallInsideRectangle(ball, rectangle);
+	bool ballInsidePost = isBallInsideRectangle(positionAfterMove, rectangle);
+	bool rectangleOccupied = !rectangle->isOpen();
+	return ballInsidePre
+		|| !ballInsidePost
+		|| !rectangleOccupied;
+}
+
 void takeCareOfBall(Ball* ball, Rectangle* rectangle){
 	while(ball->getBounceCount() < 6 && ball->isActive()){
-		bool wasInsideRectangle = isBallInsideRectangle(ball, rectangle);
-		ball->move();
-		bool isInsideRectangleAfterMoving = isBallInsideRectangle(ball, rectangle);
-		bool movedIntoRectangle = !wasInsideRectangle && isInsideRectangleAfterMoving;
-		if(movedIntoRectangle){
-			if(rectangle->isOpen()){
+		{
+			if(isMoveAllowed(ball, rectangle)){
+				ball->move();
+				std::unique_lock<std::mutex> lk(cv_m);
+				if(isBallInsideRectangle(ball, rectangle))
 				rectangle->occupyBy(ball);
-			} else {
-				ball->moveBackwards();
-			}
+			}/* else {
+				std::unique_lock<std::mutex> lk(cv_m);
+				cv.wait(lk, [ball, rectangle]{return isMoveAllowed(ball, rectangle);});
+			}*/
+		}
+		if(!isMoveAllowed(ball, rectangle)){
+			std::unique_lock<std::mutex> lk(cv_m);
+			cv.wait(lk, [ball, rectangle]{return isMoveAllowed(ball, rectangle);});
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		PlanarVector position = ball->getPosition();
@@ -370,8 +394,14 @@ public:
 		while(*keepRunning){
 			Ball* occupant = rectangle->getOccupant();
 			if(occupant){
-				if(!isBallInsideRectangle(occupant, rectangle))
-					rectangle->freeFromOccupant();
+				if(!isBallInsideRectangle(occupant, rectangle)){
+					{
+						std::lock_guard<std::mutex> lk(cv_m);
+						rectangle->freeFromOccupant();
+					}
+					cv.notify_all();
+
+				}
 			}
 			std::list<Ball*> endangeredBalls;
 			for(BallThread* ballThread : ballThreads){
@@ -379,7 +409,11 @@ public:
 					endangeredBalls.push_back(ballThread->getBall());
 				}
 			}
-			rectangle->move();
+			{
+				std::lock_guard<std::mutex> lk(cv_m);	
+				rectangle->move();
+			}
+			cv.notify_all();
 			for(Ball* ball : endangeredBalls){
 				if(isBallInsideRectangle(ball, rectangle) && ball != rectangle->getOccupant()){
 					if(rectangle->isOpen()){
@@ -516,7 +550,7 @@ void keepThrowingBalls(){
 		PlanarVector velocity = getRandomVelocity();
 		ball->setVelocity(velocity);
 		ApplicationState::addBall(ball);
-		std::this_thread::sleep_for(std::chrono::milliseconds(((rand() % 5) + 2) * 500));
+		std::this_thread::sleep_for(std::chrono::milliseconds(((rand() % 5) + 2) * BALL_THROWING_DELAY));
 	}
 	std::cout << "Not throwing no more!\n";
 }
