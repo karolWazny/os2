@@ -22,7 +22,9 @@ const double radius = 0.02;
 std::mutex cv_m;
 std::condition_variable cv;
 
-//std::mutex rectangle_mutex;
+std::mutex rectangle_mutex;
+
+std::mutex list_mutex;
 
 double getRandom(){
 	double lower_bound = 0.0;
@@ -308,7 +310,7 @@ bool isBallInsideRectangle(Ball* ball, Rectangle* rectangle){
 
 bool isMoveAllowed(Ball* ball, Rectangle* rectangle){
 	PlanarVector positionAfterMove = ball->getPosition() + ball->getVelocity();
-	bool ballInsidePre = isBallInsideRectangle(ball, rectangle);
+	bool ballInsidePre = rectangle->getOccupant() == ball;
 	bool ballInsidePost = isBallInsideRectangle(positionAfterMove, rectangle);
 	bool rectangleOccupied = !rectangle->isOpen();
 	return ballInsidePre
@@ -319,11 +321,12 @@ bool isMoveAllowed(Ball* ball, Rectangle* rectangle){
 void takeCareOfBall(Ball* ball, Rectangle* rectangle){
 	while(ball->getBounceCount() < 6 && ball->isActive()){
 		{
+			std::lock_guard<std::mutex> lk(rectangle_mutex);
 			if(isMoveAllowed(ball, rectangle)){
 				ball->move();
 				std::unique_lock<std::mutex> lk(cv_m);
 				if(isBallInsideRectangle(ball, rectangle))
-				rectangle->occupyBy(ball);
+					rectangle->occupyBy(ball);
 			}/* else {
 				std::unique_lock<std::mutex> lk(cv_m);
 				cv.wait(lk, [ball, rectangle]{return isMoveAllowed(ball, rectangle);});
@@ -403,28 +406,35 @@ public:
 
 				}
 			}
-			std::list<Ball*> endangeredBalls;
-			for(BallThread* ballThread : ballThreads){
-				if(isEndangeredByRectangle(ballThread->getBall())){
-					endangeredBalls.push_back(ballThread->getBall());
-				}
-			}
 			{
-				std::lock_guard<std::mutex> lk(cv_m);	
-				rectangle->move();
-			}
-			cv.notify_all();
-			for(Ball* ball : endangeredBalls){
-				if(isBallInsideRectangle(ball, rectangle) && ball != rectangle->getOccupant()){
-					if(rectangle->isOpen()){
-						rectangle->occupyBy(ball);
-					} else {
-						if(rectangle->getVelocity().getX() > 0)
-							ball->getPosition().setX(rectangle->getPosition().getX() + rectangle->getWidth() + radius);
-						else
-							ball->getPosition().setX(rectangle->getPosition().getX() - radius);
-						if(ball->getPosition().getX() > 1.0 || ball->getPosition().getX() < -1.0)
-							ball->deactivate();
+				std::unique_lock<std::mutex> listLock(list_mutex, std::try_to_lock);
+
+				if(listLock.owns_lock()){
+					std::list<Ball*> endangeredBalls;
+					for(BallThread* ballThread : ballThreads){
+						if(isEndangeredByRectangle(ballThread->getBall())){
+							endangeredBalls.push_back(ballThread->getBall());
+						}
+					}
+					{
+						std::lock_guard<std::mutex> lk(cv_m);	
+						rectangle->move();
+					}
+					cv.notify_all();
+					for(Ball* ball : endangeredBalls){
+						std::lock_guard<std::mutex> lk(rectangle_mutex);
+						if(isBallInsideRectangle(ball, rectangle) && ball != rectangle->getOccupant()){
+							if(rectangle->isOpen()){
+								rectangle->occupyBy(ball);
+							} else {
+								if(rectangle->getVelocity().getX() > 0)
+									ball->getPosition().setX(rectangle->getPosition().getX() + rectangle->getWidth() + radius);
+								else
+									ball->getPosition().setX(rectangle->getPosition().getX() - radius);
+								if(ball->getPosition().getX() > 1.0 || ball->getPosition().getX() < -1.0)
+									ball->deactivate();
+							}
+						}
 					}
 				}
 			}
@@ -462,21 +472,26 @@ public:
 			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
 		}
 
-        std::list<BallThread*>::iterator i = ballThreads.begin();
-		while (i != ballThreads.end())
 		{
-    		bool isActive = (*i)->isRunning();
-    		if (!isActive)
-    		{
-    			delete (*i);
-        		ballThreads.erase(i++);  // alternatively, i = items.erase(i);
-    		}
-    		else
-    		{
-        		drawCircle((*i)->getBall()->getPosition(), radius, (*i)->getBall()->getColor());
-        		++i;
-    		}
-		}
+			std::unique_lock<std::mutex> listLock(list_mutex);
+			{
+				std::list<BallThread*>::iterator i = ballThreads.begin();
+				while (i != ballThreads.end())
+				{
+					bool isActive = (*i)->isRunning();
+					if (!isActive)
+					{
+						delete (*i);
+	                	ballThreads.erase(i++);  // alternatively, i = items.erase(i);
+	                }
+                	else
+                	{
+                		drawCircle((*i)->getBall()->getPosition(), radius, (*i)->getBall()->getColor());
+                		++i;
+                	}
+            	}
+        	}
+    	}
 
         glFlush();
     }
