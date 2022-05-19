@@ -14,6 +14,8 @@
 
 //konczyc watek rzucajacy pilki - zrobione
 
+//pilka wewnatrz prostokata ma inaczej wygladac (poswiata)
+
 const double RECTANGLE_SPEED_FACTOR = 0.01;
 const double RECTANGLE_SPEED_MIN = 0.003;
 const int BALL_THROWING_DELAY = 100;
