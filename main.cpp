@@ -9,10 +9,17 @@
 #include <time.h>
 #include <condition_variable>
 
+//ETAP 2
+
 //jak pileczka jest wewnatrz prostokata, inne czekaja az ta z niego wyjdzie
 //albo prostokat sie usunie z drogi
 
-//konczyc watek rzucajacy pilki - zrobione
+//jeżeli piłka zaśnie i znajdzie się na drodze przesuwającego się prostokąta, jest przez niego
+//posuwana (spychana)
+
+//jeżeli w wyniku spychania piłka znajdzie się poza planszą, znika a jej wątek kończy się
+
+//ETAP 3
 
 //pilka wewnatrz prostokata ma inaczej wygladac (poswiata)
 
