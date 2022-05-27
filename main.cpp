@@ -95,6 +95,10 @@ public:
 	double R;
 	double G;
 	double B;
+
+	Color reverse(){
+		return Color(1.0 - R, 1.0 - G, 1.0 - B);
+	}
 };
 
 class Ball{
@@ -479,6 +483,9 @@ public:
 		if(rectangle){
 			PlanarVector position = rectangle->getPosition();
 			drawRect(position, rectangle->getWidth(), rectangle->getHeight(), rectangle->getColor());
+			if(rectangle->getOccupant()){
+				drawCircle(rectangle->getOccupant()->getPosition(), radius * 2, rectangle->getOccupant()->getColor().reverse());
+			}
 		}
 
 		{
